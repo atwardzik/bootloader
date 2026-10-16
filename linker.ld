@@ -1,7 +1,7 @@
 MEMORY
 {
-        code (rx)               : ORIGIN = 0x20080000, LENGTH = 4K
-        stack (rw)              : ORIGIN = 0x20081000, LENGTH = 4K
+        code (rx)               : ORIGIN = 0x20031700, LENGTH = 4K
+        stack (rw)              : ORIGIN = 0x20032700, LENGTH = 4K
 }
 
 SECTIONS
@@ -10,6 +10,9 @@ SECTIONS
                 __text_start__ = .;
                 *(.reset*)
                 *(.text*)
+                *(.data*)
+                *(.bss*)
+                *(.rodata*)
                 __text_end__ = .;
         } > code
 
