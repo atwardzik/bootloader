@@ -6,11 +6,11 @@
 .extern __stack_end__
 
 
-@@@@@@@@@@@@@@@@
-@
-@ Vector table
-@
-@@@@@@@@@@@@@@@@
+////////////////////////////////
+//
+// Vector table
+//
+////////////////////////////////
 .section .vectors, "ax"
 
 .align 2
@@ -19,21 +19,21 @@
 vector_table:
 .word __stack_end__
 .word reset
-irq_invalid:
+.Lirq_invalid:
         .rept 14
         .word isr_invalid
         .endr
-irq_0_51:
+.Lirq_0_51:
         .rept 52
         .word isr_invalid
         .endr
 
 
-@@@@@@@@@@@@@@@@
-@
-@ Reset
-@
-@@@@@@@@@@@@@@@@
+////////////////////////////////
+//
+// Reset
+//
+////////////////////////////////
 .section .reset, "ax"
 
 .thumb_func
@@ -52,7 +52,8 @@ reset:
         ldr     r1, =main
         blx     r1
         mov     r0, r0
-        bkpt    #0                     @ should not return
+        bkpt    #0                     // should not return
+.size reset, .-reset
 
 
 .type isr_invalid, %function

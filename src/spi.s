@@ -1,0 +1,152 @@
+.cpu cortex-m33
+.thumb
+.syntax unified
+
+.equ SSPCR0, 0x00
+.equ SSPCR1, 0x04
+.equ SSPDR, 0x08
+.equ SSPSR, 0x0c
+.equ SSPCPSR, 0x10
+.equ SSPDMACR, 0x24
+
+/**
+ * Setup the SPI_TX. Final frequency according to datasheet: cf. 12.3.4.6.1. Bit rate generation pp. 1051
+ *   r0 - prescaller in 2-254 (LSB=0!!!)
+ *   r1 - post-divider  0-255
+ */
+.thumb_func
+.global spi_init
+.align 4
+spi_init:
+        push    {r4-r7, lr}
+
+        mov     r4, r0
+        mov     r5, r1
+        ldr     r6, SPI1_BASE
+
+        bl      spi_set_baudrate
+
+        mov     r0, r6
+        bl      spi_disable
+
+        adds    r0, r6, SSPCR0
+        movs    r1, #7                  // 8 bit data, CPOL=0, CPHA=0, Motorola
+        ldr     r2, ATOMIC_BITMASK_SET
+        str     r1, [r0, r2]
+
+        adds    r0, r6, SSPDMACR
+        movs    r1, #3                  // according to SDK spi_init - always enable
+        ldr     r2, ATOMIC_BITMASK_SET
+        str     r1, [r0, r2]
+
+        mov     r0, r6
+        bl      spi_enable
+
+        pop     {r4-r7, pc}
+
+/**
+ * Setup the SPI_TX. Final frequency according to datasheet: cf. 12.3.4.6.1. Bit rate generation pp. 1051
+ *   r0 - prescaller in 2-254 (LSB=0!!!)
+ *   r1 - post-divider  0-255
+ */
+.thumb_func
+.global spi_set_baudrate
+.align 4
+spi_set_baudrate:
+        push    {r4-r6, lr}
+        mov     r4, r0
+        mov     r5, r1
+        ldr     r6, SPI1_BASE
+
+        mov     r0, r6
+        bl      spi_disable
+
+        // 1) set prescaller
+        adds    r0, r6, SSPCPSR
+        ldr     r2, ATOMIC_BITMASK_CLR
+        mov     r1, #0xff
+        str     r1, [r0, r2]            // clear current prescaller
+        ldr     r2, ATOMIC_BITMASK_SET
+        str     r4, [r0, r2]            // load prescaller
+
+
+        // 2) set post-divider
+        adds    r0, r6, SSPCR0
+        ldr     r2, ATOMIC_BITMASK_CLR
+        mov     r1, #0xff
+        lsls    r1, r1, #8              // SCR = post-divider
+        str     r1, [r0, r2]            // clear current SCR value
+        lsls    r1, r5, #8
+        ldr     r2, ATOMIC_BITMASK_SET
+        str     r1, [r0, r2]            // store SCR
+
+        mov     r0, r6
+        bl      spi_enable
+
+        pop     {r4-r6, pc}
+
+
+/**
+ * Enables spi hw block
+ *  - r0 - address of a block
+ */
+.thumb_func
+.align 4
+spi_enable:
+        adds    r0, r0, SSPCR1
+        movs    r1, #2                  // SSE_ENABLE BIT
+        ldr     r2, ATOMIC_BITMASK_SET
+        str     r1, [r0, r2]
+
+        bx      lr
+
+/**
+ * Disables spi hw block
+ *  - r0 - address of a block
+ */
+.thumb_func
+.align 4
+spi_disable:
+        adds    r0, r0, SSPCR1
+        movs    r1, #2                  // SSE_ENABLE BIT
+        ldr     r2, ATOMIC_BITMASK_CLR
+        str     r1, [r0, r2]
+
+        bx      lr
+
+/**
+ * Transfers data through selected SPI block
+ *  - r0 - data to be send
+ *
+ * Returns:
+ *  Received value in r0
+ */
+.thumb_func
+.global spi_tx_rx
+.align 4
+spi_tx_rx:
+        push    {lr}
+
+        ldr     r1, SPI1_BASE
+
+        // as the SSP device may still work (it works much slower than the cpu clock)
+        // we must wait for the availability of the fifo
+        .tnf_tx_loop:
+                ldr     r2, [r1, SSPSR]
+                tst     r2, #2                  // bit 2 (TNF): 0 full; 1 not full
+                beq     .tnf_tx_loop
+
+        str     r0, [r1, SSPDR]
+
+        .rne_tx_loop:
+                ldr     r2, [r1, SSPSR]
+                tst     r2, #4                  // RNE: wait for rx fifo not empty
+                beq     .rne_tx_loop
+        ldr     r0, [r1, SSPDR]                 // drain rx fifo, return value in r0
+
+        pop     {pc}
+
+.align 4
+SPI1_BASE:              .word 0x40088000
+ATOMIC_BITMASK_SET:     .word 0x2000
+ATOMIC_BITMASK_CLR:     .word 0x3000

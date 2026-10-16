@@ -21,34 +21,35 @@
 .align 4
 GPIO_function_select:
         push    {r4, r5}
-        @ calculate offset for PADS_GPIO_n
+        // calculate offset for PADS_GPIO_n
         ldr     r4, PADS_BANK0_BASE
         lsls    r3, r0, #2
         adds    r3, #0x04
-        add     r5, r3, r4              @ store pads GPIO_n offset
+        add     r5, r3, r4              // store pads GPIO_n offset
 
-        @ setup pads
-        ldr     r2, [r5]		@ read current state of pad
-        movs    r4, #0x40		@ PADS_BANK0_GPIO0_IE_BITS
+        // setup pads
+        ldr     r2, [r5]		// read current state of pad
+        movs    r4, #0x40		// PADS_BANK0_GPIO0_IE_BITS
         eors    r2, r2, r4
-        movs    r4, 0xc0		@ IE_BITS, OD_BITS
+        movs    r4, 0xc0		// IE_BITS, OD_BITS
         ands    r2, r2, r4
         str     r2, [r5]
 
-        @ function select
+        // function select
         ldr     r3, IO_BANK0_BASE
-        lsls    r2, r0, #3              @ calculate offset for GPIO_N_CTRL (minus 0x04)
-        adds    r2, r2, #0x04           @ GPIO0_CTRL offset
-        str     r1, [r3, r2]            @ write specfied function
+        lsls    r2, r0, #3              // calculate offset for GPIO_N_CTRL (minus 0x04)
+        adds    r2, r2, #0x04           // GPIO0_CTRL offset
+        str     r1, [r3, r2]            // write specfied function
 
 
         movs    r1, #1
         lsls    r1, r1, #8
-        ldr     r3, =0x3000		@ atomic register clear
-        str     r1, [r5, r3]            @ pads atomic
+        ldr     r3, =0x3000		// atomic register clear
+        str     r1, [r5, r3]            // pads atomic
 
         pop     {r4, r5}
         bx      lr
+.size GPIO_function_select, .-GPIO_function_select
 
 /**
  * Enables output to the pin specified in r0.
@@ -59,10 +60,11 @@ GPIO_function_select:
 output_enable_pin:
         ldr     r1, SIO_BASE
         movs    r2, #1
-        lsls    r2, r2, r0              @ set enable on n-th pin
-        str     r2, [r1, GPIO_OE_SET]   @ atomic operation GPIO_OE |= data
+        lsls    r2, r2, r0              // set enable on n-th pin
+        str     r2, [r1, GPIO_OE_SET]   // atomic operation GPIO_OE |= data
 
         bx      lr
+.size output_enable_pin, .-output_enable_pin
 
 /**
  * Sets boolean true to the pin specified in r0.
@@ -73,10 +75,11 @@ output_enable_pin:
 set_pin:
         ldr     r2, SIO_BASE
         movs    r1, #1
-        lsls    r1, r1, r0             @ set on n-th pin
+        lsls    r1, r1, r0             // set on n-th pin
         str     r1, [r2, GPIO_OUT_SET]
 
         bx      lr
+.size set_pin, .-set_pin
 
 
 /**
@@ -88,10 +91,11 @@ set_pin:
 clr_pin:
         ldr     r2, SIO_BASE
         movs    r1, #1
-        lsls    r1, r1, r0             @ reset on n-th pin
+        lsls    r1, r1, r0             // reset on n-th pin
         str     r1, [r2, GPIO_OUT_CLR]
 
         bx      lr
+.size clr_pin, .-clr_pin
 
 
 .align 4
