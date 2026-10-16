@@ -22,9 +22,29 @@
 main:
         push    {lr}
 
-        .Lsubsystem_reset:
-                // 0) Reset PLL
+        .Lclocks_setup:
                 movs    r0, BIT_PLL_SYS
+                bl      hw_reset
+                bl      setup_internal_clk
+
+
+        .Lsubsystem_reset:
+                movs    r0, BIT_DMA
+                bl      hw_reset
+
+                movs    r0, BIT_PIO0
+                bl      hw_reset
+
+                movs    r0, BIT_PIO1
+                bl      hw_reset
+
+                movs    r0, BIT_IO_UART0
+                bl      hw_reset
+
+                movs    r0, BIT_SPI0
+                bl      hw_reset
+
+                movs    r0, BIT_SPI1
                 bl      hw_reset
 
                 // 1) Reset GPIO
@@ -35,29 +55,6 @@ main:
                 movs    r0, BIT_PADS_BANK0
                 bl      hw_reset
 
-                // 3) Reset UART0
-                movs    r0, BIT_IO_UART0
-                bl      hw_reset
-
-                // 4) Reset PIO
-                movs    r0, BIT_PIO0
-                bl      hw_reset
-
-                movs    r0, BIT_PIO1
-                bl      hw_reset
-
-                // 5) Reset DMA
-                movs    r0, BIT_DMA
-                bl      hw_reset
-
-                // 6) Reset SPI
-                movs    r0, BIT_SPI0
-                bl      hw_reset
-
-                movs    r0, BIT_SPI1
-                bl      hw_reset
-
-        bl      setup_internal_clk
 
         // Set up LED pad
         mov     r0, #11                 // GPIO11 for LED

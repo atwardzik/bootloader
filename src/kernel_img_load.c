@@ -4,10 +4,10 @@
 
 #include <stdint.h>
 
-extern uint8_t __text_start__[];
+extern uint8_t __stack_start__[];
 extern uint8_t __stack_end__[];
 
-static uint8_t *const reserved_start = __text_start__;
+static uint8_t *const reserved_start = __stack_start__;
 static uint8_t *const reserved_end = __stack_end__;
 
 struct FAT16_BootRecord {
@@ -54,7 +54,7 @@ extern int sd_card_read512_block(const uint32_t block_number, char *buffer);
 
 static constexpr char kernel_name[11] = {'K', 'E', 'R', 'N', 'E', 'L', 0x20, 0x20, 'I', 'M', 'G'};
 
-static auto code_base = (void *) 0x2000'0000;
+
 
 static char toupper(char c) {
         if (c >= 'a' && c <= 'z') {
@@ -104,7 +104,7 @@ void *load_img(const struct FAT16_BootRecord *boot_record, const uint32_t first_
         sd_card_read512_block(fat_base_sector, (char *) fat);
         uint16_t fat_cached_sector = 0;
 
-
+        auto code_base = (void *) 0x2000'0000;
         uint32_t code_offset = 0;
         uint16_t cluster = dentries[i].first_cluster;
         while (cluster >= 3 && cluster < 0xfff0) {

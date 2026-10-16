@@ -27,7 +27,7 @@ OBJECTS = $(ASM_OBJECTS) $(C_OBJECTS)
 
 
 
-all: bootloader
+all: bootloader.elf
 
 $(OBJDIR):
 	mkdir -p $@
@@ -38,8 +38,8 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.s | $(OBJDIR)
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
 	$(CC) $(CC_ARGS) $< -o $@
 
-bootloader: $(OBJECTS)
+bootloader.elf: $(OBJECTS)
 	$(LD) $(LD_ARGS) -T linker.ld $^ -o $@
 
 clean:
-	rm -rf $(OBJDIR) bootloader
+	rm -rf $(OBJDIR) bootloader.*
