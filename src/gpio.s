@@ -98,6 +98,22 @@ clr_pin:
 .size clr_pin, .-clr_pin
 
 
+/**
+ * Sets boolean false to the pin specified in r0.
+ * */
+.thumb_func
+.global xor_pin
+.align 4
+xor_pin:
+        ldr     r2, SIO_BASE
+        movs    r1, #1
+        lsls    r1, r1, r0             // xor on n-th pin
+        str     r1, [r2, GPIO_OUT_XOR]
+
+        bx      lr
+.size xor_pin, .-xor_pin
+
+
 .align 4
 IO_BANK0_BASE:          .word 0x40028000
 PADS_BANK0_BASE:        .word 0x40038000

@@ -55,20 +55,24 @@ main:
                 movs    r0, BIT_PADS_BANK0
                 bl      hw_reset
 
-
         // Set up LED pad
         mov     r0, #11                 // GPIO11 for LED
         mov     r1, #5                  // 5 - SIO
         bl      GPIO_function_select
-
         mov     r0, #11
         bl      output_enable_pin
 
-        mov     r0, #11
-        bl      set_pin
+        mov     r0, #28                 // GPIO28 for LED
+        mov     r1, #5                  // 5 - SIO
+        bl      GPIO_function_select
+        mov     r0, #28
+        bl      output_enable_pin
 
         ////////////////////////////
+sd_card_boot:
         bl      init_sd_card
+        cmn     r0, #1
+        ble     .Lcard_init_failure
 
         /// Read MBR
         sub     sp, sp, #512
@@ -76,27 +80,29 @@ main:
         mov     r0, #0                  // block number
         mov     r1, sp                  // buffer
         bl      sd_card_read512_block
+        cmn     r0, #1
+        ble     .Lno_bootable_partition_found
 
 
         /// Find BOOT partition
         mov     r4, sp
-        ldr     r5, =0x1be                      // first partition entry offset
-        add     r5, r5, 0x08                    // absolute sector address offset
+        ldr     r5, =0x1be              // first partition entry offset
+        add     r5, r5, 0x08            // absolute sector address offset
         adr     r6, bootstr
         sub     sp, sp, #512
         1:
                 mov     r0, #1
-                lsls    r0, r0, #9              // 512
+                lsls    r0, r0, #9                              // 512
                 cmp     r5, r0
-                bge     .Lpartition_not_found   // out of bounds
+                bge     .Lno_bootable_partition_found           // out of bounds
 
-                ldr     r0, [r4, r5]            // first partition entry block number
-                cbz     r0, .Lpartition_not_found
+                ldr     r0, [r4, r5]                            // first partition entry block number
+                cbz     r0, .Lno_bootable_partition_found
                 mov     r1, sp
                 bl      sd_card_read512_block
 
-                add     r0, sp, #0x2b           // VOLUME LABEL
-                mov     r1, #0                  // counter
+                add     r0, sp, #0x2b                           // VOLUME LABEL
+                mov     r1, #0                                  // counter
                 2:
                         ldrb    r2, [r0, r1]
                         ldrb    r3, [r6, r1]
@@ -107,17 +113,50 @@ main:
 
         add     r1, r1, #1
         cmp     r1, bootstr_len
-        itee    eq
-        ldreq   r1, [r4, r5]                    // first partition entry block number
+        itt     ne
         addne   r5, r5, #16
         bne     1b
 
-        mov     r0, sp
+        mov     r0, #11
+        bl      set_pin
+
+        mov     r0, sp                  // MBR
+        ldr     r1, [r4, r5]            // first partition entry block number
         bl      load_img
         b       .Lrun
 
-        .Lpartition_not_found:
-                bkpt    #0
+        .Lcard_init_failure:
+                // 00-11 blinking
+                mov     r0, #11
+                bl      xor_pin
+                mov     r0, #28
+                bl      xor_pin
+
+                mov     r0, #1
+                lsls    r0, r0, #10
+                bl      delay_ms
+
+                b       sd_card_boot
+
+
+        .Lno_bootable_partition_found:
+                // 11
+                mov     r0, #11
+                bl      set_pin
+                mov     r0, #28
+                bl      set_pin
+
+                b       sd_card_boot
+
+
+        .Lno_kernel_image_found:
+                // 01
+                mov     r0, #11
+                bl      clr_pin
+                mov     r0, #28
+                bl      set_pin
+
+                b       sd_card_boot
 
         ///////////////////////////
         .Lrun:
