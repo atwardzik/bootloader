@@ -10,9 +10,6 @@
 #include <stdint.h>
 
 static constexpr int SD_CS = 13;
-static constexpr int SD_SPI_RX = 12;
-static constexpr int SD_SPI_TX = 15;
-static constexpr int SD_SPI_CLK = 14;
 
 static constexpr uint8_t CMD0 = 0;
 static constexpr uint8_t CMD8 = 8;
@@ -78,23 +75,11 @@ int sd_card_read512_block(const uint32_t block_number, char *buffer) {
 
 // FIXME: deassert CS on failure
 int init_sd_card(void) {
-        // setup SPI
-        GPIO_function_select(SD_SPI_TX, 1);
-        GPIO_function_select(SD_SPI_CLK, 1);
-        GPIO_function_select(SD_SPI_RX, 1);
-        output_enable_pin(SD_SPI_TX);
-        output_enable_pin(SD_SPI_RX);
-        output_enable_pin(SD_SPI_CLK);
-
-
-        // manual CS
-        GPIO_function_select(SD_CS, 5);
-        output_enable_pin(SD_CS);
-
-        spi_init(2, 159, 0); // 125[MHz] / 2*(1+159) = 390.625 [kHz]
+        spi_set_baudrate(2, 159);
 
         // Power up
         set_pin(SD_CS);
+        delay_ms(2);
         for (int i = 0; i < 10; ++i) { // 8 bits * 10 = 80 clock pulses
                 spi_tx_rx(0xff);
         }

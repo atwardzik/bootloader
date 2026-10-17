@@ -2,6 +2,7 @@
 .thumb
 .syntax unified
 
+/// resets
 .equ BIT_DMA, 2
 .equ BIT_IO_BANK0, 6
 .equ BIT_PADS_BANK0, 9
@@ -15,12 +16,21 @@
 
 .equ RESET_DONE_OFFSET, 0x08
 
+
+/// SPI
+.equ SD_SPI_RX, 12
+.equ SD_CS, 13
+.equ SD_SPI_CLK, 14
+.equ SD_SPI_TX, 15
+
+
 .section .text
 .global main
 .align 4
 .thumb_func
 main:
         push    {lr}
+        mov     fp, sp
 
         .Lclocks_setup:
                 movs    r0, BIT_PLL_SYS
@@ -47,26 +57,53 @@ main:
                 movs    r0, BIT_SPI1
                 bl      hw_reset
 
-                // 1) Reset GPIO
                 movs    r0, BIT_IO_BANK0
                 bl      hw_reset
 
-                // 2) Reset PADS
                 movs    r0, BIT_PADS_BANK0
                 bl      hw_reset
 
-        // Set up LED pad
-        mov     r0, #11                 // GPIO11 for LED
-        mov     r1, #5                  // 5 - SIO
-        bl      GPIO_function_select
-        mov     r0, #11
-        bl      output_enable_pin
+        .LSD_Card_SPI_setup:
+                mov     r0, SD_SPI_TX
+                mov     r1, #1                  // 1 - SPI
+                bl      GPIO_function_select
+                mov     r0, SD_SPI_RX
+                mov     r1, #1
+                bl      GPIO_function_select
+                mov     r0, SD_SPI_CLK
+                mov     r1, #1
+                bl      GPIO_function_select
+                mov     r0, SD_CS
+                mov     r1, #5
+                bl      GPIO_function_select
 
-        mov     r0, #28                 // GPIO28 for LED
-        mov     r1, #5                  // 5 - SIO
-        bl      GPIO_function_select
-        mov     r0, #28
-        bl      output_enable_pin
+                mov     r0, SD_SPI_TX
+                bl      output_enable_pin
+                mov     r0, SD_SPI_RX
+                bl      output_enable_pin
+                mov     r0, SD_SPI_CLK
+                bl      output_enable_pin
+                mov     r0, SD_CS
+                bl      output_enable_pin
+
+                // 125[MHz] / 2*(1+159) = 390.625 [kHz]
+                mov     r0, #2                  // prescaller = 2
+                mov     r1, #159                // post_divider = 159
+                mov     r2, #0                  // operating mode 0
+                bl      spi_init
+
+        .LLED_setup:
+                mov     r0, #11                 // GPIO11 for LED
+                mov     r1, #5                  // 5 - SIO
+                bl      GPIO_function_select
+                mov     r0, #11
+                bl      output_enable_pin
+
+                mov     r0, #28                 // GPIO28 for LED
+                mov     r1, #5                  // 5 - SIO
+                bl      GPIO_function_select
+                mov     r0, #28
+                bl      output_enable_pin
 
         ////////////////////////////
 sd_card_boot:
@@ -146,6 +183,7 @@ sd_card_boot:
                 mov     r0, #28
                 bl      set_pin
 
+                mov     sp, fp
                 b       sd_card_boot
 
 
@@ -156,6 +194,7 @@ sd_card_boot:
                 mov     r0, #28
                 bl      set_pin
 
+                mov     sp, fp
                 b       sd_card_boot
 
         ///////////////////////////
@@ -163,6 +202,8 @@ sd_card_boot:
                 mov     r4, r0
                 add     r4, r4, #1      // thumb jump
                 mov     r0, #11
+                bl      clr_pin
+                mov     r0, #28
                 bl      clr_pin
 
                 blx     r4
