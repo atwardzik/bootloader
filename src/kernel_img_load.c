@@ -54,6 +54,7 @@ extern int sd_card_read512_block(const uint32_t block_number, char *buffer);
 
 static constexpr char kernel_name[11] = {'K', 'E', 'R', 'N', 'E', 'L', 0x20, 0x20, 'I', 'M', 'G'};
 
+static constexpr char file_system_type[8] = {'F', 'A', 'T', '1', '6', 0x20, 0x20, 0x20};
 
 
 static char toupper(char c) {
@@ -64,9 +65,9 @@ static char toupper(char c) {
         return c;
 }
 
-static bool kernel_name_match(const char *s) {
-        for (int i = 0; i < 11; ++i) {
-                if (toupper(s[i]) != kernel_name[i]) {
+static bool str_match(const char *s, const char *ref, int len) {
+        for (int i = 0; i < len; ++i) {
+                if (toupper(s[i]) != ref[i]) {
                         return false;
                 }
         }
@@ -75,8 +76,8 @@ static bool kernel_name_match(const char *s) {
 }
 
 void *load_img(const struct FAT16_BootRecord *boot_record, const uint32_t first_block) {
-        if (boot_record->bytes_per_sector != 512) {
-                return nullptr;
+        if (boot_record->bytes_per_sector != 512 || !str_match(boot_record->fs_type, file_system_type, 8)) {
+                return (void *) -1;
         }
         const uint32_t fat_base_sector = first_block + boot_record->reserved_sectors;
         const uint32_t root_base_sector = fat_base_sector
@@ -90,13 +91,13 @@ void *load_img(const struct FAT16_BootRecord *boot_record, const uint32_t first_
 
         int i = 0;
         for (i = 0; i < 16; ++i) {
-                if (kernel_name_match(dentries[i].filename)) {
+                if (str_match(dentries[i].filename, kernel_name, 11)) {
                         break;
                 }
         }
 
         if (i >= 16) {
-                return nullptr;
+                return (void *) -2;
         }
 
 

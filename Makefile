@@ -8,7 +8,7 @@ CC_ARGS = -Iinclude -Wall -Wextra -Wpedantic -Werror \
 	  -Wno-unused-variable -Wno-unused-parameter \
 	  -Wno-discarded-qualifiers -Wno-missing-field-initializers \
 	  -Wno-unused-function \
-	  -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fPIC -c -g -O0
+	  -std=c23 -mcpu=cortex-m33 -mfpu=fpv5-sp-d16 -ffreestanding -mthumb -fPIC -c -g -Os
 
 AS_ARGS = --warn --fatal-warnings -mcpu=cortex-m33 -mthumb -g
 LD_ARGS = -nostdlib

@@ -154,13 +154,15 @@ sd_card_boot:
         addne   r5, r5, #16
         bne     1b
 
-        mov     r0, #11
-        bl      set_pin
-
         mov     r0, sp                  // MBR
         ldr     r1, [r4, r5]            // first partition entry block number
         bl      load_img
+        cmn     r0, #-1
+        beq     .Lfs_unsupported
+        cmn     r0, #-2
+        beq     .Lno_kernel_image_found
         b       .Lrun
+
 
         .Lcard_init_failure:
                 // 00-11 blinking
@@ -187,6 +189,17 @@ sd_card_boot:
                 b       sd_card_boot
 
 
+        .Lfs_unsupported:
+                // 10
+                mov     r0, #11
+                bl      set_pin
+                mov     r0, #28
+                bl      clr_pin
+
+                mov     sp, fp
+                b       sd_card_boot
+
+
         .Lno_kernel_image_found:
                 // 01
                 mov     r0, #11
@@ -196,6 +209,7 @@ sd_card_boot:
 
                 mov     sp, fp
                 b       sd_card_boot
+
 
         ///////////////////////////
         .Lrun:
