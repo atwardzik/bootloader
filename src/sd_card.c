@@ -75,7 +75,7 @@ int sd_card_read512_block(const uint32_t block_number, char *buffer) {
 
 // FIXME: deassert CS on failure
 int init_sd_card(void) {
-        spi_set_baudrate(2, 159);
+        spi_set_baudrate(2, 191); // 150[MHz] / 2(1+191) = 390.625[kHz]
 
         // Power up
         set_pin(SD_CS);
@@ -175,7 +175,7 @@ int init_sd_card(void) {
 
         set_pin(SD_CS);
 
-        spi_set_baudrate(2, 3); // 125[MHz] / 2(1+3) = 15.625[MHz]
+        spi_set_baudrate(2, 3); // 150[MHz] / 2(1+3) = 18.75[MHz]
 
 
         return 0;

@@ -91,7 +91,7 @@ setup_internal_clk:
                 movs    r1, #125                                        // 125 [MHz]
                 str     r1, [r0, PLL_FBDIV_INT]
 
-                movs    r1, #0x62                                       // POSTDIV1=5, POSTDIV2=2
+                movs    r1, #0x52                                       // POSTDIV1=5, POSTDIV2=2
                 lsls    r1, #12
                 str     r1, [r0, PLL_PRIM]
 

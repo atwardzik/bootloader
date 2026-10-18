@@ -86,9 +86,9 @@ main:
                 mov     r0, SD_CS
                 bl      output_enable_pin
 
-                // 125[MHz] / 2*(1+159) = 390.625 [kHz]
+                // 150[MHz] / 2*(1+191) = 390.625 [kHz]
                 mov     r0, #2                  // prescaller = 2
-                mov     r1, #159                // post_divider = 159
+                mov     r1, #191                // post_divider = 191
                 mov     r2, #0                  // operating mode 0
                 bl      spi_init
 
