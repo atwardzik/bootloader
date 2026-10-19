@@ -167,13 +167,8 @@ sd_card_boot:
 
         .Lcard_init_failure:
                 // 00-11 blinking
-                ldr     r0, =0x20036000
-                ldr     r1, =0x0055aaff
-                str     r1, [r0]
-                add     r0, r0, #4
-                ldr     r1, =0xffaa5500
-                str     r1, [r0]
-
+                ldr     r0, =msg_no_sd_card
+                bl      print_str
 
                 mov     r0, #11
                 bl      xor_pin
@@ -189,6 +184,9 @@ sd_card_boot:
 
         .Lno_bootable_partition_found:
                 // 11
+                ldr     r0, =msg_no_bootable_part
+                bl      print_str
+
                 mov     r0, #11
                 bl      set_pin
                 mov     r0, #28
@@ -200,6 +198,9 @@ sd_card_boot:
 
         .Lfs_unsupported:
                 // 10
+                ldr     r0, =msg_fs_unsupported
+                bl      print_str
+
                 mov     r0, #11
                 bl      set_pin
                 mov     r0, #28
@@ -211,6 +212,9 @@ sd_card_boot:
 
         .Lno_kernel_image_found:
                 // 01
+                ldr     r0, =msg_no_kernel_found
+                bl      print_str
+
                 mov     r0, #11
                 bl      clr_pin
                 mov     r0, #28
@@ -261,9 +265,32 @@ hw_reset:
         bx      lr
 .size hw_reset, .-hw_reset
 
+.thumb_func
+.align 4
+print_str:
+        push    {lr}
+        mov     r4, r0
+        mov     r5, #0
+        1:
+                ldrb    r0, [r4, r5]
+                cbz     r0, 2f
+                mov     r1, r5                  // x logical
+                mov     r2, 1                   // y logical
+                bl      vga_put_letter
+                add     r5, r5, #1
+                b       1b
+        2:
+        pop     {pc}
+
+
 .align 4
 RESETS_BASE:            .word 0x40020000
 
 ATOMIC_BITMASK_XOR:     .word 0x1000
 ATOMIC_BITMASK_SET:     .word 0x2000
 ATOMIC_BITMASK_CLR:     .word 0x3000
+
+msg_no_sd_card:         .asciz "No SD card found. Please insert.                                          "
+msg_no_bootable_part:   .asciz "No bootable partition found. The kernel should reside at partition `BOOT`."
+msg_fs_unsupported:     .asciz "File system unsupported. BOOT must be FAT16, 512 bytes per sector.        "
+msg_no_kernel_found:    .asciz "No kernel image found. Kernel must be named `KERNEL.IMG`                  "
