@@ -105,6 +105,7 @@ main:
                 mov     r0, #28
                 bl      output_enable_pin
 
+        bl      vga_init
         ////////////////////////////
 sd_card_boot:
         bl      init_sd_card
@@ -116,7 +117,7 @@ sd_card_boot:
 
         mov     r0, #0                  // block number
         mov     r1, sp                  // buffer
-        bl      sd_card_read512_block
+        bl      sd_card_read512_block   // todo, check if ends with 0xaa55
         cmn     r0, #1
         ble     .Lno_bootable_partition_found
 
@@ -166,6 +167,14 @@ sd_card_boot:
 
         .Lcard_init_failure:
                 // 00-11 blinking
+                ldr     r0, =0x20036000
+                ldr     r1, =0x0055aaff
+                str     r1, [r0]
+                add     r0, r0, #4
+                ldr     r1, =0xffaa5500
+                str     r1, [r0]
+
+
                 mov     r0, #11
                 bl      xor_pin
                 mov     r0, #28

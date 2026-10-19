@@ -4,11 +4,13 @@
 
 #include <stdint.h>
 
-extern uint8_t __stack_start__[];
-extern uint8_t __stack_end__[];
+// extern uint8_t __data_start__[];
+// extern uint8_t __stack_end__[];
 
-static uint8_t *const reserved_start = __stack_start__;
-static uint8_t *const reserved_end = __stack_end__;
+// static uint8_t *const reserved_start = __data_start__;
+// static uint8_t *const reserved_end = __stack_end__;
+static const uint8_t *const reserved_start = (uint8_t *) 0x20031700;
+static const uint8_t *const reserved_end = (uint8_t *) 0x20033700;
 
 struct FAT16_BootRecord {
         uint8_t jump_code[3];

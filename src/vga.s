@@ -1,0 +1,458 @@
+.cpu cortex-m33
+.thumb
+.syntax unified
+
+.extern __vidram_start__
+.extern __vidram_length__
+
+.thumb_func
+.global vga_init
+.align 4
+vga_init:
+        push    {lr}
+        bl      vga_clr_screen
+
+        mov     r0, #9
+        bl      hsync_gen_init
+
+        mov     r0, #10
+        bl      vsync_gen_init
+
+        mov     r0, #3          // pin red0
+        bl      rgb_gen_init
+
+        bl      setup_vga_dma
+        bl      vga_start
+        pop     {pc}
+
+.thumb_func
+.global vga_clr_screen
+.align 4
+vga_clr_screen:
+        push    {lr}
+        ldr     r0, =0x20035000
+        movs    r1, #0
+        ldr     r2, =307200
+
+        .loop_clear:
+                str     r1, [r0]
+                adds    r0, r0, #4
+                subs    r2, r2, #4
+                cmp     r2, #0
+                bne     .loop_clear
+        pop     {pc}
+
+.thumb_func
+.global vga_start
+.align 4
+vga_start:
+        push    {lr}
+
+        movs    r0, #0                  // PIO BLOCK 0
+        movs    r1, #7                  // sm 0, 1, 2
+        movs    r2, #1                  // enabled=true
+        bl      set_multiple_sm_enabled
+
+        movs    r0, #1                  // start DMA channel
+        ldr     r1, =0x50000450
+        str     r0, [r1]
+
+        pop     {pc}
+
+/**
+ * Setup the HSYNC signal
+ *   r0 - pin
+ */
+.thumb_func
+.global hsync_gen_init
+.align 4
+hsync_gen_init:
+        push    {r4, lr}
+        mov     r4, r0
+        ////// According to squarewave example from SDK -
+        ////// pp. 313 (rp2040) / 877 (rp2350) in the datasheet.
+        //////
+        ////// The sequence of operations is taken straight from the SDK.
+
+        // 0) Disable State Machine!!!
+        movs    r0, #0
+        movs    r1, #0
+        movs    r2, #0
+        bl      set_sm_enabled
+
+        // 1) Load program
+        ldr     r0, =hsync_gen
+        movs    r1, #9                  // Total of 9 words
+        movs    r2, #0                  // PIO0
+        bl      load_pio_prog
+
+        // 2) Set state machine exec ctrl with wrap (SM0_EXECCTRL); (WRAP_TARGET << 7) | (WRAP << 12)
+        movs    r0, #0
+        movs    r1, #0
+        ldr     r2, =0x8080             // bottom wrap at 1, top wrap at 8
+        bl      setup_pio_execctrl
+
+        // 3) Set state machine pin ctrl
+        movs    r0, #1                  // one pin affected
+        lsls    r0, #26                 // SET_COUNT_BITS
+        mov     r1, r4
+        lsls    r1, #5                  // SET_BASE_BITS
+        orrs    r2, r0, r1              // control bits
+
+        movs    r0, #0                  // PIO BLOCK 0
+        movs    r1, #0                  // State Machine 0
+        bl      setup_pio_pinctrl
+
+        // 4) Set clock divisor
+        movs    r0, #0                  // PIO BLOCK 0
+        movs    r1, #0                  // State Machine 0
+        movs    r2, #6                  // 150 MHz / 6 = 25 MHz
+        lsls    r2, #16
+        bl      setup_pio_clkdiv
+
+        // 5) Init GPIO
+        mov     r0, r4                  // GPIO
+        movs    r1, #6                  // Funcsel: PIO0
+        bl      GPIO_function_select
+
+        // 6) Set consecutive pindirs to output
+        movs    r0, #0
+        movs    r1, #0
+        mov     r2, r4
+        movs    r3, #1
+        bl      set_consecutive_pindirs_out
+
+        // 7) PIO State Machine init - load and jump to first instruction
+        movs    r0, #0
+        movs    r1, #0
+        bl      clear_pio_sm_fifo
+
+        movs    r0, #0
+        movs    r1, #0
+        movs    r2, #0                  // address begin
+        bl      clear_internal_and_jump
+
+        // 8) Set state machine running
+        movs    r0, #0
+        movs    r1, #0
+        ldr     r2, =0x28f              // 655 = 640 pixels + 16 frontporch - 1
+        bl      sm_put
+
+        movs    r0, #0
+        movs    r1, #0
+        movs    r2, #1
+        //bl      set_sm_enabled
+
+        pop     {r4, pc}
+
+
+/**
+ * Setup the VSYNC signal
+ *   r0 - pin
+ */
+.thumb_func
+.global vsync_gen_init
+.align 4
+vsync_gen_init:
+        push    {r4, lr}
+        mov     r4, r0
+
+
+        // 0) Disable State Machine!!!
+        movs    r0, #0
+        movs    r1, #1
+        movs    r2, #0
+        bl      set_sm_enabled
+
+        // 1) Load program
+        ldr     r0, =vsync_gen
+        movs    r1, #14                 // Total of 14 words
+        movs    r2, #0                  // PIO0
+        bl      load_pio_prog
+
+        // 2) Set state machine exec ctrl with wrap (SM0_EXECCTRL); (WRAP_TARGET << 7) | (WRAP << 12)
+        movs    r0, #0
+        movs    r1, #1
+        ldr     r2, =0x16500            // bottom wrap at 1, top wrap at 14 + OFFSET
+        // add info about SIDE_EN
+        movs    r3, #1
+        lsls    r3, r3, #30             // SIDE_EN bit
+        orrs    r2, r2, r3
+        bl      setup_pio_execctrl
+
+        // 3) Set state machine pin ctrl
+        // add info about SET_COUNT
+        movs    r0, #1                  // one pin affected
+        lsls    r0, #26                 // SET_COUNT_BITS
+
+        // add info about SET_BASE
+        mov     r1, r4
+        lsls    r1, #5                  // SET_BASE_BITS
+        orrs    r2, r0, r1              // control bits
+
+        // add info about SIDESET_COUNT
+        movs    r0, #2                  // two pins affected (inclusive the enable bit)
+        lsls    r0, #29                 // SIDESET_COUNT_BITS
+        orrs    r2, r2, r0
+
+        // add info about SIDESET_BASE
+        mov     r0, r4                  // GPIO pin on which the VSYNC will appear
+        lsls    r0, #10                 // SIDESET_BASE_BITS
+        orrs    r2, r2, r0              // control bits
+
+        movs    r0, #0                  // PIO BLOCK 0
+        movs    r1, #1                  // State Machine 1
+        bl      setup_pio_pinctrl
+
+        // 4) Set clock divisor
+        movs    r0, #0                  // PIO BLOCK 0
+        movs    r1, #1                  // State Machine 1
+        movs    r2, #6                  // 150 MHz / 6 = 25 MHz
+        lsls    r2, #16
+        bl      setup_pio_clkdiv
+
+        // 5) Init GPIO
+        mov     r0, r4
+        movs    r1, #6                  // Funcsel: PIO0
+        bl      GPIO_function_select
+
+        // 6) Set consecutive pindirs to output
+        movs    r0, #0
+        movs    r1, #1
+        mov     r2, r4
+        movs    r3, #1
+        bl      set_consecutive_pindirs_out
+
+        // 7) PIO State Machine init - load and jump to first instruction
+        movs    r0, #0
+        movs    r1, #1
+        bl      clear_pio_sm_fifo
+
+        movs    r0, #0
+        movs    r1, #1
+        movs    r2, #9                  // address begin
+        bl      clear_internal_and_jump
+
+        // 8) Set state machine running
+        movs    r0, #0
+        movs    r1, #1
+        ldr     r2, =0x1df              // 479 = 480 pixels - 1
+        bl      sm_put
+
+        pop     {r4, pc}
+
+
+/**
+ * Setup the RGB analog signal
+ *   r0 - pin
+ */
+.thumb_func
+.global rgb_gen_init
+.align 4
+rgb_gen_init:
+        push    {r4, lr}
+        mov     r4, r0
+
+        // 0) Disable State Machine!!!
+        movs    r0, #0
+        movs    r1, #2
+        movs    r2, #0
+        bl      set_sm_enabled
+
+        // 1) Load program
+        ldr     r0, =rgb_gen
+        movs    r1, #9                  // Total of 9 words
+        movs    r2, #0                  // PIO0
+        bl      load_pio_prog
+
+        // 2) Set state machine exec ctrl with wrap (SM0_EXECCTRL); (WRAP_TARGET << 7) | (WRAP << 12)
+        movs    r0, #0
+        movs    r1, #2
+        ldr     r2, =0x1fc80            // bottom wrap at 25, top wrap at 31
+        bl      setup_pio_execctrl
+
+        // 3) Set state machine pin ctrl
+        movs    r0, #5                  // five pins affected
+        lsls    r0, #26                 // SET_COUNT_BITS
+        mov     r1, r4
+        lsls    r1, #5                  // SET_BASE_BITS
+        orrs    r2, r0, r1              // control bits
+        ldr     r0, =0x600000           // OUT_COUNT_BITS
+        orrs    r0, r0, r4              // OUT_BASE_BITS
+        orrs    r2, r2, r0
+
+        movs    r0, #0                  // PIO BLOCK 0
+        movs    r1, #2                  // State Machine 2
+        bl      setup_pio_pinctrl
+
+        // 5) Init GPIO
+        mov     r0, r4                  // GPIO n
+        movs    r1, #6                  // Funcsel: PIO0
+        bl      GPIO_function_select
+
+        mov     r0, r4                  // GPIO n + 1
+        adds    r0, r0, #1
+        movs    r1, #6                  // Funcsel: PIO0
+        bl      GPIO_function_select
+
+        mov     r0, r4                  // GPIO n + 2
+        adds    r0, r0, #2
+        movs    r1, #6                  // Funcsel: PIO0
+        bl      GPIO_function_select
+
+        mov     r0, r4                  // GPIO n + 3
+        adds    r0, r0, #3
+        movs    r1, #6                  // Funcsel: PIO0
+        bl      GPIO_function_select
+
+        mov     r0, r4                  // GPIO n + 4
+        adds    r0, r0, #4
+        movs    r1, #6                  // Funcsel: PIO0
+        bl      GPIO_function_select
+
+        mov     r0, r4                  // GPIO n + 5
+        adds    r0, r0, #5
+        movs    r1, #6                  // Funcsel: PIO0
+        bl      GPIO_function_select
+
+
+        // 6) Set consecutive pindirs to output
+        movs    r0, #0
+        movs    r1, #2
+        mov     r2, r4
+        movs    r3, #6
+        bl      set_consecutive_pindirs_out
+
+        // 7) PIO State Machine init - load and jump to first instruction
+        movs    r0, #0
+        movs    r1, #2
+        bl      clear_pio_sm_fifo
+
+        movs    r0, #0
+        movs    r1, #2
+        movs    r2, #23                 // address begin
+        bl      clear_internal_and_jump
+
+        // 8) Set state machine running
+        movs    r0, #0
+        movs    r1, #2
+        ldr     r2, =0x27f              // 639 = 640 pixels - 1
+        bl      sm_put
+
+        pop     {r4, pc}
+
+.thumb_func
+.global setup_vga_dma
+.align 4
+setup_vga_dma:
+        // CH0
+        ldr     r0, CH0_READ_ADDR
+        ldr     r1, VIDRAM_START
+        str     r1, [r0]
+
+        adds    r0, r0, #4              // CH0_WRITE_ADDR
+        ldr     r1, =0x50200018         // rgb pio tx fifo
+        str     r1, [r0]
+
+        adds    r0, r0, #4              // CH0_TRANSFER_COUNT
+        ldr     r1, =__vidram_length__
+        str     r1, [r0]
+
+        adds    r0, r0, #8              // CH0_AL1_CTRL
+        ldr     r1, =0x42011
+        str     r1, [r0]
+
+        // CH1
+        ldr     r0, CH1_READ_ADDR
+        ldr     r1, =VIDRAM_START
+        str     r1, [r0]
+
+        adds    r0, r0, #4              // CH1_WRITE_ADDR
+        ldr     r1, CH0_READ_ADDR
+        str     r1, [r0]
+
+        adds    r0, r0, #4              // CH1_TRANSFER_COUNT
+        movs    r1, #1
+        str     r1, [r0]
+
+        adds    r0, r0, #8              // CH1_AL1_CTRL
+        ldr     r1, =0x7e0009
+        str     r1, [r0]
+
+        bx      lr
+
+.align 4
+VIDRAM_START:   .word __vidram_start__
+CH0_READ_ADDR:  .word 0x50000000
+CH1_READ_ADDR:  .word 0x50000040
+
+/**
+ * Generating Hsync signal. Total of 9 instructions.
+ */
+.align 4
+hsync_gen:
+        .word 0x80a0    // 0:            pull   block
+                        //       .wrap_target
+        .word 0xa027    // 1:            mov    x, osr
+        .word 0x0042    // 2:activeporch:jmp    x--, activeporch
+        .word 0xff00    // 3: pulse:     set    pins, 0 [31]
+        .word 0xff00    // 4:            set    pins, 0 [31]
+        .word 0xff00    // 5:            set    pins, 0 [31]
+        .word 0xff01    // 6: backporch: set    pins, 1 [31]
+        .word 0xec01    // 7:            set    pins, 1 [12]
+        .word 0xc100    // 8:            irq    0[1]
+                        //       .wrap
+
+
+/**
+ * Generating Vsync signal. Total of 14 instructions.
+ *  .side_set 1 opt
+ */
+.align 4
+vsync_gen:
+        .word 0x80a0    // 9:            pull   block
+                        //       .wrap_target
+        .word 0xa027    // 10:           mov    x, osr
+        .word 0x20c0    // 11: active:   wait   1 irq, 0
+        .word 0xc001    // 12:           irq    1
+        .word 0x004b    // 13:           jmp    x--, active
+        .word 0xe049    // 14:           set    y, 9
+        .word 0x20c0    // 15:frontporch:wait   1 irq, 0
+        .word 0x008f    // 16:           jmp    y--, frontporch
+        .word 0xe000    // 17:syncpulse: set    pins, 0
+        .word 0x20c0    // 18:           wait   1 irq, 0
+        .word 0x20c0    // 19:           wait   1 irq, 0
+        .word 0xe05f    // 20:           set    y, 31
+        .word 0x38c0    // 21:backporch  wait   1 irq, 0        side 1
+        .word 0x0095    // 22:           jmp    y--, backporch
+                        //       .wrap
+
+/**
+ * Generating RGB signals. Total of 8 instructions.
+ * `out` instruction at colorout depends on the sys_clk.
+ * When running at 125[MHz] the whole colorout should take
+ * 5 cycles, as 125/5=25[MHz] which is the desired freq for 640x480.
+ * For 150 we should have 6 cycles, so that 150/6=25.
+ */
+.align 4
+rgb_gen:
+
+        .word 0x80a0    // 23:           pull   block
+        .word 0xa047    // 24:           mov    y, osr
+                        //       .wrap_target
+        // .word 0xe000    // 25:           set    pins, 0
+        .word 0xe020    // 25:           set    x, 0
+        .word 0xa001    // 26:           mov    pins, x
+        .word 0xa022    // 27:           mov    x, y
+        .word 0x22c1    // 28:           wait   1 irq, 1 [2]
+        // .word 0xa042
+        // .word 0xe203
+        .word 0x80a0    // 29: colorout: pull   block
+        .word 0x6306    // 30:           out    pins, 6  [3]      // for 5-bit mode
+        // .word 0x6203    // 29:           out    pins, 3 [2]       // for 3-bit mode
+        .word 0x005d    // 31:           jmp    x--, colorout
+                        //       .wrap
+
+
+//.section .vidram, "wa"
+//.incbin "images/logo_flash_name.raw"

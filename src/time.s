@@ -83,12 +83,14 @@ setup_internal_clk:
                 str     r1, [r0, CLK_REF_DIV]
 
                 // 3) setup PLL; in SDK rp2_common/hardware_pll/pll.c:42-69 also with check for disrupting already working PLL
+                // FOUTPOSTDIV = 12[MHz] / refdiv * fbdiv/(postdiv1*postdiv2)
+                // 150 = 12/1 * 125/10
                 ldr     r0, PLL_SYS_BASE
 
                 movs    r1, #1
                 str     r1, [r0]                                        // set refdiv
 
-                movs    r1, #125                                        // 125 [MHz]
+                movs    r1, #125                                        // fbdiv=125
                 str     r1, [r0, PLL_FBDIV_INT]
 
                 movs    r1, #0x52                                       // POSTDIV1=5, POSTDIV2=2
